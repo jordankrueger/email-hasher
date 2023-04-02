@@ -1,6 +1,8 @@
 # email-hasher
 A Python script which normalizes (to upper or lower case) a list of email addresses and then hashes it into the cryptographic functions of your choice. 
 
+**This script was written by ChatGPT 4.0.**
+
 ## There's also a Mac app
 Using PyInstaller, I've packaged this script with all the dependencies and libraries needed to run it into a MacOS application file. You can download that here. 
 
