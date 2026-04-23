@@ -9,7 +9,7 @@ const src = (p) => readFile(join(root, 'src', p), 'utf8');
 
 function stripExports(code) {
   return code
-    .replace(/^export\s+function\s+/gm, 'function ')
+    .replace(/^export\s+(async\s+)?function\s+/gm, (_, a) => (a ? 'async function ' : 'function '))
     .replace(/^export\s+const\s+/gm, 'const ')
     .replace(/^export\s+class\s+/gm, 'class ')
     .replace(/^export\s+let\s+/gm, 'let ')

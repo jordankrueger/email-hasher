@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jrnkP9owURxhiBTGoD0U8PLkB8g10TVBjYwhwIcvxyQ='; style-src 'sha256-MOxmto7wu4i49eu5cGVQMasbT1xtxdCm88bz2OfkrRc='; connect-src 'none'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src blob:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xE+wMKDK48rYjRgus3GXtN57jXNgsXeYFL6sb5jWE/A='; style-src 'sha256-MOxmto7wu4i49eu5cGVQMasbT1xtxdCm88bz2OfkrRc='; connect-src 'none'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Hasher — list-swap tool</title>
 <style>:root { color-scheme: light dark; }
@@ -232,7 +232,7 @@ function toHex(buffer) {
   return out;
 }
 
-export async function hashEmail(email, { algorithm, case: caseMode }) {
+async function hashEmail(email, { algorithm, case: caseMode }) {
   if (!ALLOWED.has(algorithm)) {
     throw new Error(`Unsupported algorithm: ${algorithm}`);
   }
@@ -241,7 +241,7 @@ export async function hashEmail(email, { algorithm, case: caseMode }) {
   return toHex(digest);
 }
 
-export async function hmacEmail(email, passphrase, { case: caseMode }) {
+async function hmacEmail(email, passphrase, { case: caseMode }) {
   if (!passphrase || passphrase.length === 0) {
     throw new Error('HMAC passphrase is required');
   }
@@ -270,7 +270,7 @@ function difference(a, b) {
 }
 
 
-const WORKER_SOURCE = "const ALLOWED = new Set(['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512']);\nconst enc = new TextEncoder();\n\nfunction normalize(email, caseMode) {\n  const trimmed = String(email).trim();\n  return caseMode === 'upper' ? trimmed.toUpperCase() : trimmed.toLowerCase();\n}\n\nfunction toHex(buffer) {\n  const bytes = new Uint8Array(buffer);\n  let out = '';\n  for (let i = 0; i < bytes.length; i++) {\n    out += bytes[i].toString(16).padStart(2, '0');\n  }\n  return out;\n}\n\nexport async function hashEmail(email, { algorithm, case: caseMode }) {\n  if (!ALLOWED.has(algorithm)) {\n    throw new Error(`Unsupported algorithm: ${algorithm}`);\n  }\n  const data = enc.encode(normalize(email, caseMode));\n  const digest = await crypto.subtle.digest(algorithm, data);\n  return toHex(digest);\n}\n\nexport async function hmacEmail(email, passphrase, { case: caseMode }) {\n  if (!passphrase || passphrase.length === 0) {\n    throw new Error('HMAC passphrase is required');\n  }\n  const keyData = enc.encode(passphrase);\n  const key = await crypto.subtle.importKey(\n    'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']\n  );\n  const data = enc.encode(normalize(email, caseMode));\n  const sig = await crypto.subtle.sign('HMAC', key, data);\n  return toHex(sig);\n}\n\n\n// Runs in a Web Worker. The build step concatenates hash.mjs functions\n// (hashEmail, hmacEmail) into the same Blob so no imports are needed here.\n\nself.addEventListener('message', async (e) => {\n  const { id, type, payload } = e.data;\n  try {\n    if (type === 'hash') {\n      const { emails, algorithm, caseMode, hmac, passphrase } = payload;\n      const out = new Array(emails.length);\n      const batch = 500;\n      for (let i = 0; i < emails.length; i++) {\n        if (hmac) {\n          out[i] = await hmacEmail(emails[i], passphrase, { case: caseMode });\n        } else {\n          out[i] = await hashEmail(emails[i], { algorithm, case: caseMode });\n        }\n        if (i % batch === 0) {\n          self.postMessage({ id, type: 'progress', done: i, total: emails.length });\n        }\n      }\n      self.postMessage({ id, type: 'done', result: out });\n    }\n  } catch (err) {\n    self.postMessage({ id, type: 'error', message: err.message });\n  }\n});\n";
+const WORKER_SOURCE = "const ALLOWED = new Set(['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512']);\nconst enc = new TextEncoder();\n\nfunction normalize(email, caseMode) {\n  const trimmed = String(email).trim();\n  return caseMode === 'upper' ? trimmed.toUpperCase() : trimmed.toLowerCase();\n}\n\nfunction toHex(buffer) {\n  const bytes = new Uint8Array(buffer);\n  let out = '';\n  for (let i = 0; i < bytes.length; i++) {\n    out += bytes[i].toString(16).padStart(2, '0');\n  }\n  return out;\n}\n\nasync function hashEmail(email, { algorithm, case: caseMode }) {\n  if (!ALLOWED.has(algorithm)) {\n    throw new Error(`Unsupported algorithm: ${algorithm}`);\n  }\n  const data = enc.encode(normalize(email, caseMode));\n  const digest = await crypto.subtle.digest(algorithm, data);\n  return toHex(digest);\n}\n\nasync function hmacEmail(email, passphrase, { case: caseMode }) {\n  if (!passphrase || passphrase.length === 0) {\n    throw new Error('HMAC passphrase is required');\n  }\n  const keyData = enc.encode(passphrase);\n  const key = await crypto.subtle.importKey(\n    'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']\n  );\n  const data = enc.encode(normalize(email, caseMode));\n  const sig = await crypto.subtle.sign('HMAC', key, data);\n  return toHex(sig);\n}\n\n\n// Runs in a Web Worker. The build step concatenates hash.mjs functions\n// (hashEmail, hmacEmail) into the same Blob so no imports are needed here.\n\nself.addEventListener('message', async (e) => {\n  const { id, type, payload } = e.data;\n  try {\n    if (type === 'hash') {\n      const { emails, algorithm, caseMode, hmac, passphrase } = payload;\n      const out = new Array(emails.length);\n      const batch = 500;\n      for (let i = 0; i < emails.length; i++) {\n        if (hmac) {\n          out[i] = await hmacEmail(emails[i], passphrase, { case: caseMode });\n        } else {\n          out[i] = await hashEmail(emails[i], { algorithm, case: caseMode });\n        }\n        if (i % batch === 0) {\n          self.postMessage({ id, type: 'progress', done: i, total: emails.length });\n        }\n      }\n      self.postMessage({ id, type: 'done', result: out });\n    }\n  } catch (err) {\n    self.postMessage({ id, type: 'error', message: err.message });\n  }\n});\n";
 
 // DOM wiring for the web app. This module is concatenated last by the build
 // and runs in the main thread. Pure logic lives in the other modules.
