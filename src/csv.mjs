@@ -4,10 +4,20 @@ export function parseCSV(text) {
   if (!text || text.length === 0) throw new Error('CSV is empty');
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
+  // Strip leading `#`-prefixed comment lines before tokenization.
+  // Only applied to the prefix; `#` in the middle of the file is literal.
+  while (text.length > 0 && text[0] === '#') {
+    const nl = text.indexOf('\n');
+    if (nl < 0) { text = ''; break; }
+    text = text.slice(nl + 1);
+  }
+  if (text.length === 0) throw new Error('CSV has no header row');
+
   const rows = [];
   let field = '';
   let row = [];
   let inQuotes = false;
+  let fieldStart = true; // true iff no characters have been read into the current field yet
   let i = 0;
 
   while (i < text.length) {
@@ -24,11 +34,12 @@ export function parseCSV(text) {
         i++;
       }
     } else {
-      if (c === '"') { inQuotes = true; i++; }
-      else if (c === ',') { row.push(field); field = ''; i++; }
-      else if (c === '\r' && text[i + 1] === '\n') { row.push(field); rows.push(row); field = ''; row = []; i += 2; }
-      else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); field = ''; row = []; i++; }
-      else { field += c; i++; }
+      // Only a quote at the very start of a field opens a quoted region (RFC 4180).
+      if (c === '"' && fieldStart) { inQuotes = true; fieldStart = false; i++; }
+      else if (c === ',') { row.push(field); field = ''; fieldStart = true; i++; }
+      else if (c === '\r' && text[i + 1] === '\n') { row.push(field); rows.push(row); field = ''; row = []; fieldStart = true; i += 2; }
+      else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); field = ''; row = []; fieldStart = true; i++; }
+      else { field += c; fieldStart = false; i++; }
     }
   }
   if (field.length > 0 || row.length > 0) {
