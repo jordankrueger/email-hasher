@@ -42,10 +42,12 @@ dropHash.addEventListener('drop', (e) => {
 fileHash.addEventListener('change', (e) => { if (e.target.files[0]) loadHashFile(e.target.files[0]); });
 
 async function loadHashFile(f) {
-  hashFile = f;
   const text = await f.text();
   try {
     const { header, data } = parseCSV(text);
+    // Only assign state after parsing succeeds, so a failed load doesn't
+    // leave stale data + new filename behind.
+    hashFile = f;
     hashColumns = header;
     hashData = data;
     const colSel = $('col-hash');
@@ -63,6 +65,13 @@ async function loadHashFile(f) {
     $('hash-controls').hidden = false;
     $('hash-error').textContent = '';
   } catch (err) {
+    // On failure, wipe all hash-tab state so the Hash button can't act on stale data.
+    hashFile = null;
+    hashColumns = [];
+    hashData = [];
+    $('col-hash').innerHTML = '';
+    $('hash-file-label').textContent = '';
+    $('hash-controls').hidden = true;
     $('hash-error').textContent = err.message;
   }
 }
@@ -94,7 +103,10 @@ $('btn-hash').addEventListener('click', async () => {
   $('hash-error').textContent = '';
   if (!hashFile) { $('hash-error').textContent = 'Please select a CSV first.'; return; }
   const colIdx = parseInt($('col-hash').value, 10);
-  const emails = hashData.map((r) => r[colIdx] ?? '').filter((v) => v.length > 0);
+  // Filter on the trimmed value: whitespace-only cells must not be hashed
+  // (they would normalize to "" and produce a deterministic hash that
+  // could create spurious overlap with other empty cells).
+  const emails = hashData.map((r) => String(r[colIdx] ?? '')).filter((v) => v.trim().length > 0);
   if (emails.length === 0) { $('hash-error').textContent = 'Selected column has no values.'; return; }
   const recipe = currentRecipe();
   const passphrase = recipe.hmac ? $('hmac-passphrase').value : '';
@@ -137,8 +149,8 @@ $('btn-hash').addEventListener('click', async () => {
   const outHeader = [...hashColumns, 'hashed_email'];
   const queue = result.slice();
   const outData = hashData.map((r) => {
-    const email = r[colIdx] ?? '';
-    const hash = email.length > 0 ? queue.shift() : '';
+    const email = String(r[colIdx] ?? '');
+    const hash = email.trim().length > 0 ? queue.shift() : '';
     return [...r, hash];
   });
   const csv = stringifyCSV(outHeader, outData, { comments: ['recipe: ' + recipeString(recipe)] });
@@ -222,5 +234,10 @@ function triggerDownload(text, filename) {
 function makeWorker() {
   // WORKER_SOURCE is injected as a string constant by the build step.
   const blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
-  return new Worker(URL.createObjectURL(blob));
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+  // Worker copies the source on construction; revoking the URL immediately
+  // frees the Blob and avoids leaking one URL per hash run.
+  URL.revokeObjectURL(url);
+  return worker;
 }

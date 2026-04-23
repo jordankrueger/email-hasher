@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-xE+wMKDK48rYjRgus3GXtN57jXNgsXeYFL6sb5jWE/A='; style-src 'sha256-MOxmto7wu4i49eu5cGVQMasbT1xtxdCm88bz2OfkrRc='; connect-src 'none'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src blob:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/YSZT1Z+QI74wPkOv90xL1LcapTqwGQ4DLdQjFfKddo='; style-src 'sha256-MChbyNzqU/YEwtdvmGIa5HhTjSsE/mUcnQ861hx7wmw='; connect-src 'none'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Email Hasher — list-swap tool</title>
 <style>:root { color-scheme: light dark; }
 * { box-sizing: border-box; }
+/* The hidden attribute must win over author display rules on .controls, .compare-grid, etc. */
+[hidden] { display: none !important; }
 body { margin: 0; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: Canvas; color: CanvasText; }
 main { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem; }
 h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
@@ -150,10 +152,20 @@ function parseCSV(text) {
   if (!text || text.length === 0) throw new Error('CSV is empty');
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
+  // Strip leading `#`-prefixed comment lines before tokenization.
+  // Only applied to the prefix; `#` in the middle of the file is literal.
+  while (text.length > 0 && text[0] === '#') {
+    const nl = text.indexOf('\n');
+    if (nl < 0) { text = ''; break; }
+    text = text.slice(nl + 1);
+  }
+  if (text.length === 0) throw new Error('CSV has no header row');
+
   const rows = [];
   let field = '';
   let row = [];
   let inQuotes = false;
+  let fieldStart = true; // true iff no characters have been read into the current field yet
   let i = 0;
 
   while (i < text.length) {
@@ -170,11 +182,12 @@ function parseCSV(text) {
         i++;
       }
     } else {
-      if (c === '"') { inQuotes = true; i++; }
-      else if (c === ',') { row.push(field); field = ''; i++; }
-      else if (c === '\r' && text[i + 1] === '\n') { row.push(field); rows.push(row); field = ''; row = []; i += 2; }
-      else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); field = ''; row = []; i++; }
-      else { field += c; i++; }
+      // Only a quote at the very start of a field opens a quoted region (RFC 4180).
+      if (c === '"' && fieldStart) { inQuotes = true; fieldStart = false; i++; }
+      else if (c === ',') { row.push(field); field = ''; fieldStart = true; i++; }
+      else if (c === '\r' && text[i + 1] === '\n') { row.push(field); rows.push(row); field = ''; row = []; fieldStart = true; i += 2; }
+      else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); field = ''; row = []; fieldStart = true; i++; }
+      else { field += c; fieldStart = false; i++; }
     }
   }
   if (field.length > 0 || row.length > 0) {
@@ -316,10 +329,12 @@ dropHash.addEventListener('drop', (e) => {
 fileHash.addEventListener('change', (e) => { if (e.target.files[0]) loadHashFile(e.target.files[0]); });
 
 async function loadHashFile(f) {
-  hashFile = f;
   const text = await f.text();
   try {
     const { header, data } = parseCSV(text);
+    // Only assign state after parsing succeeds, so a failed load doesn't
+    // leave stale data + new filename behind.
+    hashFile = f;
     hashColumns = header;
     hashData = data;
     const colSel = $('col-hash');
@@ -337,6 +352,13 @@ async function loadHashFile(f) {
     $('hash-controls').hidden = false;
     $('hash-error').textContent = '';
   } catch (err) {
+    // On failure, wipe all hash-tab state so the Hash button can't act on stale data.
+    hashFile = null;
+    hashColumns = [];
+    hashData = [];
+    $('col-hash').innerHTML = '';
+    $('hash-file-label').textContent = '';
+    $('hash-controls').hidden = true;
     $('hash-error').textContent = err.message;
   }
 }
@@ -368,7 +390,10 @@ $('btn-hash').addEventListener('click', async () => {
   $('hash-error').textContent = '';
   if (!hashFile) { $('hash-error').textContent = 'Please select a CSV first.'; return; }
   const colIdx = parseInt($('col-hash').value, 10);
-  const emails = hashData.map((r) => r[colIdx] ?? '').filter((v) => v.length > 0);
+  // Filter on the trimmed value: whitespace-only cells must not be hashed
+  // (they would normalize to "" and produce a deterministic hash that
+  // could create spurious overlap with other empty cells).
+  const emails = hashData.map((r) => String(r[colIdx] ?? '')).filter((v) => v.trim().length > 0);
   if (emails.length === 0) { $('hash-error').textContent = 'Selected column has no values.'; return; }
   const recipe = currentRecipe();
   const passphrase = recipe.hmac ? $('hmac-passphrase').value : '';
@@ -411,8 +436,8 @@ $('btn-hash').addEventListener('click', async () => {
   const outHeader = [...hashColumns, 'hashed_email'];
   const queue = result.slice();
   const outData = hashData.map((r) => {
-    const email = r[colIdx] ?? '';
-    const hash = email.length > 0 ? queue.shift() : '';
+    const email = String(r[colIdx] ?? '');
+    const hash = email.trim().length > 0 ? queue.shift() : '';
     return [...r, hash];
   });
   const csv = stringifyCSV(outHeader, outData, { comments: ['recipe: ' + recipeString(recipe)] });
@@ -496,7 +521,12 @@ function triggerDownload(text, filename) {
 function makeWorker() {
   // WORKER_SOURCE is injected as a string constant by the build step.
   const blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
-  return new Worker(URL.createObjectURL(blob));
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+  // Worker copies the source on construction; revoking the URL immediately
+  // frees the Blob and avoids leaking one URL per hash run.
+  URL.revokeObjectURL(url);
+  return worker;
 }
 </script>
 </body>

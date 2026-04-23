@@ -1,5 +1,7 @@
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
+/* The hidden attribute must win over author display rules on .controls, .compare-grid, etc. */
+[hidden] { display: none !important; }
 body { margin: 0; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: Canvas; color: CanvasText; }
 main { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem; }
 h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }

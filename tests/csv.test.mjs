@@ -55,3 +55,34 @@ test('stringifyCSV: supports optional leading comment lines', () => {
   const out = stringifyCSV(['email'], [['a@x.com']], { comments: ['recipe: SHA-256'] });
   assert.equal(out, '# recipe: SHA-256\nemail\na@x.com\n');
 });
+
+test('parseCSV: skips leading # comment lines before header', () => {
+  const rows = parseCSV('# recipe: SHA-256, lowercase, whitespace trimmed, no HMAC\nemail,name\na@x.com,Alice\n');
+  assert.deepEqual(rows.header, ['email', 'name']);
+  assert.deepEqual(rows.data, [['a@x.com', 'Alice']]);
+});
+
+test('parseCSV: skips multiple leading comment lines', () => {
+  const rows = parseCSV('# recipe: SHA-256\n# generated: 2026-04-23\nemail\na@x.com\n');
+  assert.deepEqual(rows.header, ['email']);
+  assert.deepEqual(rows.data, [['a@x.com']]);
+});
+
+test('parseCSV: does not skip # in the middle of the file', () => {
+  // Once past the leading comments, a # is just a normal field character.
+  const rows = parseCSV('email,note\na@x.com,#hashtag\n');
+  assert.deepEqual(rows.data, [['a@x.com', '#hashtag']]);
+});
+
+test('parseCSV: round-trips stringifyCSV output with comments', () => {
+  const original = stringifyCSV(['email'], [['a@x.com'], ['b@y.com']], { comments: ['recipe: SHA-256, lowercase, whitespace trimmed, no HMAC'] });
+  const { header, data } = parseCSV(original);
+  assert.deepEqual(header, ['email']);
+  assert.deepEqual(data, [['a@x.com'], ['b@y.com']]);
+});
+
+test('parseCSV: mid-field quote is treated as literal, not field-opening', () => {
+  // Only quotes at the start of a field open a quoted region (RFC 4180).
+  const rows = parseCSV('a,b\nabc"def,2\n');
+  assert.deepEqual(rows.data, [['abc"def', '2']]);
+});
