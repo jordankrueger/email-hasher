@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - name: Bundle offline zip
+        run: |
+          set -euo pipefail
+          mkdir -p dist/email-hasher
+          cp index.html README.md SECURITY.md LICENSE dist/email-hasher/
+          cp -r sample dist/email-hasher/
+          # Reproducible zip: stable mtimes, sorted entries
+          find dist/email-hasher -exec touch -t 197001010000.00 {} +
+          cd dist
+          find email-hasher -print0 | LC_ALL=C sort -z | xargs -0 zip -X email-hasher-offline.zip
+          sha256sum email-hasher-offline.zip > email-hasher-offline.zip.sha256
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
+        with:
+          files: |
+            dist/email-hasher-offline.zip
+            dist/email-hasher-offline.zip.sha256
+          generate_release_notes: true

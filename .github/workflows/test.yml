@@ -1,0 +1,30 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run build
+      - name: Verify index.html is up-to-date with sources
+        run: |
+          if ! git diff --quiet -- index.html; then
+            echo "::error::index.html is out of sync with src/. Run 'npm run build' and commit."
+            git --no-pager diff -- index.html | head -40
+            exit 1
+          fi
+      - run: npx playwright install chromium --with-deps
+      - run: npm run test:e2e
