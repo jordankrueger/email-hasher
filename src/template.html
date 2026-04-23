@@ -4,24 +4,38 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src '{{CSP_SCRIPT_HASH}}'; style-src '{{CSP_STYLE_HASH}}'; connect-src 'none'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Client-side email-list hashing and comparison for nonprofit list-swap workflows. No network, no storage, no third-party code.">
 <title>Email Hasher — list-swap tool</title>
 <style>{{CSS}}</style>
 </head>
 <body>
 <main>
   <header>
+    <p class="meta">
+      <span>Client-side tool</span>
+      <span><span class="dot">●</span> Zero network</span>
+      <span><span class="dot">●</span> Offline capable</span>
+      <span>MIT license</span>
+    </p>
     <h1>Email Hasher</h1>
-    <p class="sub">Client-side hashing and comparison for advocacy-org list swaps.</p>
-    <p class="privacy">Your emails never leave your browser. This page works offline. <a href="#" id="verify-link">How do I verify?</a></p>
-    <div id="verify-panel" hidden class="verify">
-      <p>This page makes <strong>zero network requests</strong> after it loads. You can confirm that yourself:</p>
-      <ol>
-        <li>Open your browser's DevTools (⌘/Ctrl + Shift + I), click the <em>Network</em> tab, reload the page, then hash a file. The list should stay empty.</li>
-        <li>Or put your computer in airplane mode and run the tool — everything still works.</li>
-        <li>Or download the release bundle and open <code>index.html</code> from a folder on your computer.</li>
-      </ol>
-    </div>
+    <p class="sub">A privacy-preserving tool for advocacy organizations that need to swap supporter lists without exposing raw email addresses to each other.</p>
   </header>
+
+  <p class="privacy">
+    <span class="seal">Verified</span>
+    <span>
+      Your emails never leave your browser. This page works offline.
+      <a href="#" id="verify-link">How do I verify? →</a>
+    </span>
+  </p>
+  <div id="verify-panel" hidden class="verify">
+    <p>This page makes <strong>zero network requests</strong> after it loads. You can confirm that yourself:</p>
+    <ol>
+      <li>Open your browser's DevTools (<code>⌘ / Ctrl + Shift + I</code>), click the <em>Network</em> tab, reload the page, then hash a file. The list should stay empty.</li>
+      <li>Or put your computer in airplane mode and run the tool — everything still works.</li>
+      <li>Or download the release bundle and open <code>index.html</code> from a folder on your computer.</li>
+    </ol>
+  </div>
 
   <nav class="tabs" role="tablist">
     <button data-tab="hash" class="active" role="tab">Hash a list</button>
@@ -29,38 +43,49 @@
   </nav>
 
   <section data-panel="hash">
+    <p class="section-mark"><span class="num">01</span>Upload</p>
     <div id="drop-hash" class="drop" tabindex="0" role="button" aria-label="Drop CSV here or click to choose">
-      <p>Drop your CSV here, or click to choose a file.</p>
+      <p class="drop-primary">Drop a CSV here, or click to choose a file</p>
       <p id="hash-file-label" class="hint"></p>
     </div>
     <input type="file" id="file-hash" accept=".csv" hidden>
 
     <div id="hash-controls" hidden class="controls">
-      <label>Email column: <select id="col-hash"></select></label>
+      <p class="section-mark"><span class="num">02</span>Recipe</p>
+
+      <label>Email column
+        <select id="col-hash"></select>
+      </label>
 
       <fieldset>
         <legend>Case normalization</legend>
-        <label><input type="radio" name="case-hash" value="lower" checked> Lowercase (recommended)</label>
+        <label><input type="radio" name="case-hash" value="lower" checked> Lowercase <span style="color:var(--ink-muted);font-size:0.85em;">&nbsp;(recommended)</span></label>
         <label><input type="radio" name="case-hash" value="upper"> Uppercase</label>
       </fieldset>
 
-      <label>Algorithm:
+      <label>Algorithm
         <select id="algo">
           <option value="SHA-256" selected>SHA-256 (recommended)</option>
-          <option value="SHA-1">SHA-1 (weak — avoid unless your partner requires it)</option>
+          <option value="SHA-1">SHA-1 (weak — avoid unless a partner requires it)</option>
           <option value="SHA-384">SHA-384</option>
           <option value="SHA-512">SHA-512</option>
         </select>
       </label>
 
-      <label><input type="checkbox" id="hmac-toggle"> Use shared passphrase (HMAC-SHA-256)</label>
+      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="hmac-toggle">
+        <span>Use shared passphrase <span style="color:var(--ink-muted);font-size:0.9em;">(HMAC-SHA-256 — recommended for sensitive swaps)</span></span>
+      </label>
       <div id="hmac-passphrase-wrap" hidden class="hmac">
-        <label>Shared passphrase: <input type="password" id="hmac-passphrase" autocomplete="off"></label>
-        <p class="warn">Both orgs must use the exact same passphrase. Share it out-of-band — in person, by phone, or Signal — not over email.</p>
+        <label>Shared passphrase
+          <input type="password" id="hmac-passphrase" autocomplete="off">
+        </label>
+        <p class="warn">Both orgs must use the exact same passphrase. Share it out-of-band — in person, by phone, or Signal. Never over email.</p>
       </div>
 
       <p id="recipe" class="recipe"></p>
 
+      <p class="section-mark"><span class="num">03</span>Run</p>
       <div class="actions">
         <button id="btn-hash" class="primary">Hash emails</button>
         <button id="btn-hash-clear">Clear</button>
@@ -73,35 +98,46 @@
   </section>
 
   <section data-panel="cmp" hidden>
-    <p class="cmp-intro">Upload the <strong>hashed</strong> versions of both lists (the files you downloaded from the Hash tab). Compare works on hashes only — it will refuse to run on raw email CSVs.</p>
+    <p class="cmp-intro">Upload the <strong>hashed</strong> versions of both lists — the files you downloaded from the Hash tab. Compare works on hashes only; it will refuse to run on raw email CSVs.</p>
+
+    <p class="section-mark"><span class="num">01</span>Upload both hashed lists</p>
     <div class="compare-grid">
       <div>
-        <div id="drop-a" class="drop" tabindex="0" role="button" aria-label="Drop List A CSV">Drop List A CSV</div>
+        <div id="drop-a" class="drop" tabindex="0" role="button" aria-label="Drop List A hashed CSV">
+          <p class="drop-primary">Drop List A</p>
+          <p id="a-file-label" class="hint"></p>
+        </div>
         <input type="file" id="file-a" accept=".csv" hidden>
-        <p id="a-file-label" class="hint"></p>
         <div id="a-picker-wrap" hidden>
-          <label>Hash column: <select id="col-a"></select></label>
+          <label>Hash column
+            <select id="col-a"></select>
+          </label>
           <p id="a-col-warn" class="warn" hidden></p>
         </div>
       </div>
       <div>
-        <div id="drop-b" class="drop" tabindex="0" role="button" aria-label="Drop List B CSV">Drop List B CSV</div>
+        <div id="drop-b" class="drop" tabindex="0" role="button" aria-label="Drop List B hashed CSV">
+          <p class="drop-primary">Drop List B</p>
+          <p id="b-file-label" class="hint"></p>
+        </div>
         <input type="file" id="file-b" accept=".csv" hidden>
-        <p id="b-file-label" class="hint"></p>
         <div id="b-picker-wrap" hidden>
-          <label>Hash column: <select id="col-b"></select></label>
+          <label>Hash column
+            <select id="col-b"></select>
+          </label>
           <p id="b-col-warn" class="warn" hidden></p>
         </div>
       </div>
     </div>
 
+    <p class="section-mark"><span class="num">02</span>Choose output</p>
     <fieldset>
-      <legend>What to output</legend>
-      <label><input type="radio" name="cmp-mode" value="a-minus" checked> List A minus overlap (common for excluding shared supporters)</label>
-      <label><input type="radio" name="cmp-mode" value="overlap"> Overlap (hashes in both lists)</label>
-      <label><input type="radio" name="cmp-mode" value="b-minus"> List B minus overlap</label>
+      <label><input type="radio" name="cmp-mode" value="a-minus" checked> <span>List A minus overlap <span style="color:var(--ink-muted);font-size:0.9em;">&nbsp;(common: exclude shared supporters from outreach)</span></span></label>
+      <label><input type="radio" name="cmp-mode" value="overlap"> <span>Overlap <span style="color:var(--ink-muted);font-size:0.9em;">&nbsp;(hashes in both lists)</span></span></label>
+      <label><input type="radio" name="cmp-mode" value="b-minus"> <span>List B minus overlap</span></label>
     </fieldset>
 
+    <p class="section-mark"><span class="num">03</span>Run</p>
     <div class="actions">
       <button id="btn-cmp" class="primary">Compare</button>
     </div>
@@ -110,7 +146,8 @@
   </section>
 
   <footer>
-    <p>Open source at <code>github.com/jordankrueger/email-hasher</code>. See <code>SECURITY.md</code> for the threat model. Audits welcome.</p>
+    <p>Source · <code>github.com/jordankrueger/email-hasher</code></p>
+    <p>Threat model · see <code>SECURITY.md</code> · audits welcome</p>
   </footer>
 </main>
 <script>{{JS}}</script>
