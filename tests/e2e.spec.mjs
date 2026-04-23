@@ -155,7 +155,7 @@ test.describe('email-hasher web app (file://)', () => {
     // Just make sure recipe is still showing old selection but no download is produced from stale state.
   });
 
-  test('compare mode computes empty when A equals B', async ({ page }) => {
+  test('compare mode refuses to run on raw email CSVs', async ({ page }) => {
     await page.goto(appUrl);
     await page.click('[data-tab="cmp"]');
 
@@ -163,6 +163,33 @@ test.describe('email-hasher web app (file://)', () => {
     await page.setInputFiles('#file-b', sampleCsv);
     await expect(page.locator('#a-picker-wrap')).toBeVisible();
     await expect(page.locator('#b-picker-wrap')).toBeVisible();
+    // Warning surfaces on load because the email column contains '@'.
+    await expect(page.locator('#a-col-warn')).toContainText(/raw email/i);
+    await expect(page.locator('#b-col-warn')).toContainText(/raw email/i);
+
+    // Clicking Compare should refuse rather than produce a bogus overlap.
+    await page.click('#btn-cmp');
+    await expect(page.locator('#cmp-error')).toContainText(/refusing to compare/i);
+    // No result count shown, no file downloaded.
+    await expect(page.locator('#cmp-result')).toBeEmpty();
+  });
+
+  test('compare mode computes empty when A equals B (using hashed files)', async ({ page }) => {
+    // Produce a hashed file from the sample, then use that on both sides.
+    await page.goto(appUrl);
+    await page.setInputFiles('#file-hash', sampleCsv);
+    await expect(page.locator('#hash-controls')).toBeVisible();
+    const dl = page.waitForEvent('download');
+    await page.click('#btn-hash');
+    const hashedPath = await (await dl).path();
+
+    await page.click('[data-tab="cmp"]');
+    await page.setInputFiles('#file-a', hashedPath);
+    await page.setInputFiles('#file-b', hashedPath);
+    await expect(page.locator('#a-picker-wrap')).toBeVisible();
+    // No warning on a properly-hashed file.
+    await expect(page.locator('#a-col-warn')).toBeHidden();
+    await expect(page.locator('#b-col-warn')).toBeHidden();
 
     const downloadPromise = page.waitForEvent('download');
     await page.click('#btn-cmp');

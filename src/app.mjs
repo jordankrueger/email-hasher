@@ -177,6 +177,48 @@ for (const side of ['a', 'b']) {
   file.addEventListener('change', (e) => { if (e.target.files[0]) loadCmp(side, e.target.files[0]); });
 }
 
+// Hex hash lengths we expose in the web app (SHA-1 / SHA-256 / SHA-384 / SHA-512).
+const HASH_LENGTHS = new Set([40, 64, 96, 128]);
+
+function columnLooksHashed(values) {
+  // Look at up to 20 non-empty samples. Require them all to be
+  // hex strings of a consistent, hash-appropriate length.
+  const sample = values.slice(0, 20).map((v) => String(v).trim()).filter(Boolean);
+  if (sample.length === 0) return false;
+  const len = sample[0].length;
+  if (!HASH_LENGTHS.has(len)) return false;
+  return sample.every((v) => v.length === len && /^[0-9a-fA-F]+$/.test(v));
+}
+
+function columnLooksLikeRawEmails(values) {
+  // If any of the first 20 non-empty values contains '@', treat the column as raw emails.
+  const sample = values.slice(0, 20).map((v) => String(v).trim()).filter(Boolean);
+  return sample.some((v) => v.includes('@'));
+}
+
+function cmpSideValues(ref, colIdx) {
+  return ref.data.map((r) => String(r[colIdx] ?? ''));
+}
+
+function refreshCmpColumnWarning(side) {
+  const ref = side === 'a' ? cmpA : cmpB;
+  const wrap = $(`${side}-picker-wrap`);
+  const warn = $(`${side}-col-warn`);
+  if (!ref || wrap.hidden) { warn.textContent = ''; warn.hidden = true; return; }
+  const colIdx = parseInt($(`col-${side}`).value, 10);
+  const values = cmpSideValues(ref, colIdx);
+  if (columnLooksLikeRawEmails(values)) {
+    warn.textContent = 'This column contains raw email addresses. Compare expects already-hashed values. Please go to the Hash tab, hash this list first, then come back and upload the hashed file here.';
+    warn.hidden = false;
+  } else if (!columnLooksHashed(values)) {
+    warn.textContent = "This column doesn't look like hex hash values. Make sure you're uploading the hashed output (from the Hash tab), and that you picked the hashed_email column.";
+    warn.hidden = false;
+  } else {
+    warn.textContent = '';
+    warn.hidden = true;
+  }
+}
+
 async function loadCmp(side, f) {
   try {
     const { header, data } = parseCSV(await f.text());
@@ -184,8 +226,14 @@ async function loadCmp(side, f) {
     else cmpB = { f, header, data };
     const sel = $(`col-${side}`);
     sel.innerHTML = '';
-    const pre = header.findIndex((h) => /^(hashed?[_\- ]?email|hash|sha\d*)$/i.test(h));
-    const pick = pre >= 0 ? pre : 0;
+    // Prefer a column named `hashed_email` / `hash` / `sha256`. If none matches,
+    // pick the first column whose values look like hashes. Otherwise fall back to 0
+    // and let the warning layer tell the user the file looks wrong.
+    let pick = header.findIndex((h) => /^(hashed?[_\- ]?email|hash|sha\d*)$/i.test(h));
+    if (pick < 0) {
+      pick = header.findIndex((_, i) => columnLooksHashed(data.map((r) => r[i] ?? '')));
+    }
+    if (pick < 0) pick = 0;
     header.forEach((h, i) => {
       const opt = document.createElement('option');
       opt.value = String(i);
@@ -196,9 +244,17 @@ async function loadCmp(side, f) {
     $(`${side}-file-label`).textContent = `${f.name} — ${data.length} rows`;
     $(`${side}-picker-wrap`).hidden = false;
     $('cmp-error').textContent = '';
+    refreshCmpColumnWarning(side);
   } catch (err) {
+    if (side === 'a') cmpA = null; else cmpB = null;
+    $(`${side}-picker-wrap`).hidden = true;
+    $(`${side}-file-label`).textContent = '';
     $('cmp-error').textContent = err.message;
   }
+}
+
+for (const side of ['a', 'b']) {
+  $(`col-${side}`).addEventListener('change', () => refreshCmpColumnWarning(side));
 }
 
 $('btn-cmp').addEventListener('click', () => {
@@ -206,8 +262,19 @@ $('btn-cmp').addEventListener('click', () => {
   if (!cmpA || !cmpB) { $('cmp-error').textContent = 'Please select both CSVs.'; return; }
   const colA = parseInt($('col-a').value, 10);
   const colB = parseInt($('col-b').value, 10);
-  const arrA = cmpA.data.map((r) => String(r[colA] ?? '')).filter(Boolean);
-  const arrB = cmpB.data.map((r) => String(r[colB] ?? '')).filter(Boolean);
+  const rawA = cmpSideValues(cmpA, colA);
+  const rawB = cmpSideValues(cmpB, colB);
+
+  // Refuse to operate on raw emails. Comparing raw emails byte-for-byte gives
+  // misleading overlap (missing differently-cased or whitespace-padded duplicates)
+  // AND defeats the whole privacy purpose of the tool.
+  if (columnLooksLikeRawEmails(rawA) || columnLooksLikeRawEmails(rawB)) {
+    $('cmp-error').textContent = 'Refusing to compare: at least one of the selected columns contains raw email addresses. Compare is for files that have already been hashed by the Hash tab. Hash your lists first, then upload the hashed files here.';
+    return;
+  }
+
+  const arrA = rawA.filter(Boolean);
+  const arrB = rawB.filter(Boolean);
   const mode = radioValue('cmp-mode');
   let result;
   if (mode === 'overlap') result = intersection(arrA, arrB);
