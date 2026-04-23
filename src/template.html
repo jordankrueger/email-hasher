@@ -73,6 +73,7 @@
   </section>
 
   <section data-panel="cmp" hidden>
+    <p class="cmp-intro">Upload the <strong>hashed</strong> versions of both lists (the files you downloaded from the Hash tab). Compare works on hashes only — it will refuse to run on raw email CSVs.</p>
     <div class="compare-grid">
       <div>
         <div id="drop-a" class="drop" tabindex="0" role="button" aria-label="Drop List A CSV">Drop List A CSV</div>
@@ -80,6 +81,7 @@
         <p id="a-file-label" class="hint"></p>
         <div id="a-picker-wrap" hidden>
           <label>Hash column: <select id="col-a"></select></label>
+          <p id="a-col-warn" class="warn" hidden></p>
         </div>
       </div>
       <div>
@@ -88,6 +90,7 @@
         <p id="b-file-label" class="hint"></p>
         <div id="b-picker-wrap" hidden>
           <label>Hash column: <select id="col-b"></select></label>
+          <p id="b-col-warn" class="warn" hidden></p>
         </div>
       </div>
     </div>

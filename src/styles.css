@@ -23,6 +23,7 @@ label { display: block; }
 select, input[type=password] { font: inherit; padding: 0.4rem 0.5rem; border-radius: 4px; border: 1px solid GrayText; background: Canvas; color: CanvasText; min-width: 260px; }
 .hmac { padding: 0.5rem 0.75rem; border: 1px solid GrayText; border-radius: 6px; }
 .warn { color: #b35c00; margin: 0.25rem 0 0; font-size: 0.9rem; }
+.cmp-intro { margin: 0 0 1rem; padding: 0.75rem 1rem; border: 1px solid GrayText; border-radius: 6px; background: rgba(128,128,128,0.06); }
 .recipe { padding: 0.5rem 0.75rem; background: rgba(128,128,128,0.08); border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }
 .actions { display: flex; gap: 0.5rem; }
 button { font: inherit; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid GrayText; background: Canvas; color: CanvasText; cursor: pointer; }
