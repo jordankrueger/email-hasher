@@ -28,6 +28,15 @@ let hashFile = null;
 let hashColumns = [];
 let hashData = [];
 
+function resetHashTab() {
+  hashFile = null;
+  hashColumns = [];
+  hashData = [];
+  $('col-hash').innerHTML = '';
+  $('hash-file-label').textContent = '';
+  $('hash-controls').hidden = true;
+}
+
 const dropHash = $('drop-hash');
 const fileHash = $('file-hash');
 dropHash.addEventListener('click', () => fileHash.click());
@@ -66,12 +75,7 @@ async function loadHashFile(f) {
     $('hash-error').textContent = '';
   } catch (err) {
     // On failure, wipe all hash-tab state so the Hash button can't act on stale data.
-    hashFile = null;
-    hashColumns = [];
-    hashData = [];
-    $('col-hash').innerHTML = '';
-    $('hash-file-label').textContent = '';
-    $('hash-controls').hidden = true;
+    resetHashTab();
     $('hash-error').textContent = err.message;
   }
 }
@@ -180,10 +184,15 @@ for (const side of ['a', 'b']) {
 // Hex hash lengths we expose in the web app (SHA-1 / SHA-256 / SHA-384 / SHA-512).
 const HASH_LENGTHS = new Set([40, 64, 96, 128]);
 
+// Return up to 20 non-empty trimmed string samples from a values array.
+function sampleValues(values) {
+  return values.slice(0, 20).map((v) => String(v).trim()).filter(Boolean);
+}
+
 function columnLooksHashed(values) {
   // Look at up to 20 non-empty samples. Require them all to be
   // hex strings of a consistent, hash-appropriate length.
-  const sample = values.slice(0, 20).map((v) => String(v).trim()).filter(Boolean);
+  const sample = sampleValues(values);
   if (sample.length === 0) return false;
   const len = sample[0].length;
   if (!HASH_LENGTHS.has(len)) return false;
@@ -192,8 +201,7 @@ function columnLooksHashed(values) {
 
 function columnLooksLikeRawEmails(values) {
   // If any of the first 20 non-empty values contains '@', treat the column as raw emails.
-  const sample = values.slice(0, 20).map((v) => String(v).trim()).filter(Boolean);
-  return sample.some((v) => v.includes('@'));
+  return sampleValues(values).some((v) => v.includes('@'));
 }
 
 function cmpSideValues(ref, colIdx) {
@@ -206,7 +214,8 @@ function refreshCmpColumnWarning(side) {
   const warn = $(`${side}-col-warn`);
   if (!ref || wrap.hidden) { warn.textContent = ''; warn.hidden = true; return; }
   const colIdx = parseInt($(`col-${side}`).value, 10);
-  const values = cmpSideValues(ref, colIdx);
+  // Sample only the first 20 rows — columnLooks* functions check at most 20 values.
+  const values = ref.data.slice(0, 20).map((r) => String(r[colIdx] ?? ''));
   if (columnLooksLikeRawEmails(values)) {
     warn.textContent = 'This column contains raw email addresses. Compare expects already-hashed values. Please go to the Hash tab, hash this list first, then come back and upload the hashed file here.';
     warn.hidden = false;
